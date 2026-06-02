@@ -1,159 +1,113 @@
 const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const restartBtn = document.getElementById('restart');
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor('#071023');
-
-let W = window.innerWidth;
-let H = window.innerHeight;
-let running = true;
-let lastTime = 0;
-let spawnTimer = 0;
-let spawnInterval = 0.9;
-let score = 0;
-let speedMultiplier = 1;
-const obstacles = [];
-
+let W = 800, H = 600;
 function resize(){
-  W = window.innerWidth;
-  H = window.innerHeight;
-  camera.aspect = W / H;
-  camera.updateProjectionMatrix();
-  renderer.setSize(W, H);
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  W = canvas.width; H = canvas.height;
 }
 window.addEventListener('resize', resize);
 resize();
 
-// Lights
-const ambient = new THREE.HemisphereLight(0xa3bff8, 0x202437, 0.8);
-scene.add(ambient);
-const directional = new THREE.DirectionalLight(0xffffff, 1);
-directional.position.set(-5, 10, 5);
-scene.add(directional);
-
-// Road
-const roadGeom = new THREE.PlaneGeometry(20, 120, 1, 1);
-const roadMat = new THREE.MeshStandardMaterial({ color: 0x1d2f4e, side: THREE.DoubleSide });
-const road = new THREE.Mesh(roadGeom, roadMat);
-road.rotation.x = -Math.PI / 2;
-road.position.z = -50;
-scene.add(road);
-
-// Track markings
-const lineGeom = new THREE.PlaneGeometry(1, 120, 1, 1);
-const lineMat = new THREE.MeshStandardMaterial({ color: 0xf3f7ff, emissive: 0x3050ff, emissiveIntensity: 0.3 });
-const centerLine = new THREE.Mesh(lineGeom, lineMat);
-centerLine.rotation.x = -Math.PI / 2;
-centerLine.position.z = -50;
-scene.add(centerLine);
-
 // Player
-const playerGeom = new THREE.BoxGeometry(2.2, 1, 4);
-const playerMat = new THREE.MeshStandardMaterial({ color: 0x4ee1a7, metalness: 0.2, roughness: 0.5 });
-const player = new THREE.Mesh(playerGeom, playerMat);
-player.position.set(0, 0.7, 10);
-scene.add(player);
-
-camera.position.set(0, 5, 18);
-camera.lookAt(0, 0, 0);
-
-const playerState = { x: 0, dir: 0, maxX: 8, speed: 18 };
-
-function spawnObstacle(){
-  const width = 1.5 + Math.random() * 2.5;
-  const depth = 2 + Math.random() * 3;
-  const color = new THREE.Color().setHSL(0.02 + Math.random() * 0.08, 0.9, 0.5);
-  const geom = new THREE.BoxGeometry(width, 1.8, depth);
-  const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.45 });
-  const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.set((Math.random() - 0.5) * 14, 0.9, -80);
-  scene.add(mesh);
-  obstacles.push({ mesh, width, depth, active: true });
-}
+const player = {w:60,h:18,x:0,y:0,speed:520,dir:0};
+// Enemies
+let enemies = [];
+let running = true;
+let lastTime = 0;
+let spawnTimer = 0;
+let spawnInterval = 900; // ms
+let score = 0;
 
 function reset(){
-  obstacles.forEach(obj => scene.remove(obj.mesh));
-  obstacles.length = 0;
+  enemies = [];
   running = true;
   lastTime = performance.now();
   spawnTimer = 0;
-  spawnInterval = 0.9;
+  spawnInterval = 900;
   score = 0;
-  speedMultiplier = 1;
-  playerState.x = 0;
-  player.dir = 0;
-  player.position.x = 0;
+  player.x = W/2 - player.w/2;
+  player.y = H - player.h - 30;
   restartBtn.hidden = true;
   requestAnimationFrame(loop);
 }
 
-function collide(objA, objB){
-  const a = new THREE.Box3().setFromObject(objA);
-  const b = new THREE.Box3().setFromObject(objB);
-  return a.intersectsBox(b);
+function spawn(){
+  const w = 20 + Math.random()*60;
+  enemies.push({x:Math.random()*(W-w), y:-20, w, h:16, speed:120 + Math.random()*220});
+}
+
+function rectsCollide(a,b){
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 function update(dt){
-  playerState.x += playerState.dir * playerState.speed * dt;
-  playerState.x = Math.max(-playerState.maxX, Math.min(playerState.maxX, playerState.x));
-  player.position.x += (playerState.x - player.position.x) * 12 * dt;
+  // player movement
+  player.x += player.dir * player.speed * dt;
+  if(player.x < 0) player.x = 0;
+  if(player.x + player.w > W) player.x = W - player.w;
 
-  spawnTimer += dt;
-  if(spawnTimer > spawnInterval){
-    spawnTimer = 0;
-    spawnObstacle();
-    spawnInterval = Math.max(0.35, spawnInterval * 0.98);
-    speedMultiplier = Math.min(4, speedMultiplier + 0.025);
+  // spawn enemies
+  spawnTimer += dt*1000;
+  if(spawnTimer > spawnInterval){ spawnTimer = 0; spawn(); spawnInterval = Math.max(300, spawnInterval*0.995); }
+
+  // update enemies
+  for(let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
+    e.y += e.speed * dt;
+    if(e.y > H) enemies.splice(i,1);
+    else if(rectsCollide(e, player)) { running = false; }
   }
 
-  obstacles.forEach((obs, index) => {
-    obs.mesh.position.z += 28 * dt * speedMultiplier;
-    if(obs.mesh.position.z > 20){
-      scene.remove(obs.mesh);
-      obstacles.splice(index, 1);
-    } else if(obs.active && collide(obs.mesh, player)){
-      obs.active = false;
-      running = false;
-    }
-  });
+  // score grows with time and cleared enemies
+  score += dt * 10;
+}
 
-  score += dt * 25 * speedMultiplier;
-  scoreEl.textContent = 'Score: ' + Math.floor(score);
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // background
+  ctx.fillStyle = '#071023'; ctx.fillRect(0,0,W,H);
+
+  // player
+  ctx.fillStyle = '#4ee1a7'; ctx.fillRect(player.x, player.y, player.w, player.h);
+
+  // enemies
+  ctx.fillStyle = '#ff6b6b';
+  enemies.forEach(e => ctx.fillRect(e.x, e.y, e.w, e.h));
+
+  // ground line
+  ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(0, H-10, W, 10);
 }
 
 function loop(ts){
-  const dt = Math.min((ts - lastTime) / 1000, 0.035);
+  const dt = (ts - lastTime)/1000;
   lastTime = ts;
-
-  if(running){
-    update(dt);
-    renderer.render(scene, camera);
+  if(running){ update(dt); draw(); scoreEl.textContent = 'Score: ' + Math.floor(score);
     requestAnimationFrame(loop);
   } else {
-    renderer.render(scene, camera);
+    // game over
+    draw();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff'; ctx.font = '28px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Game Over — Score: ' + Math.floor(score), W/2, H/2 - 10);
     restartBtn.hidden = false;
   }
 }
 
-window.addEventListener('keydown', e => {
-  if(e.key === 'ArrowLeft' || e.key === 'a') playerState.dir = -1;
-  if(e.key === 'ArrowRight' || e.key === 'd') playerState.dir = 1;
-});
-window.addEventListener('keyup', e => {
-  if(['ArrowLeft', 'ArrowRight', 'a', 'd'].includes(e.key)) playerState.dir = 0;
-});
+// controls
+window.addEventListener('keydown', e => { if(e.key==='ArrowLeft' || e.key==='a') player.dir = -1; if(e.key==='ArrowRight' || e.key==='d') player.dir = 1; });
+window.addEventListener('keyup', e => { if(['ArrowLeft','ArrowRight','a','d'].includes(e.key)) player.dir = 0; });
 
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  const x = e.touches[0].clientX;
-  playerState.dir = x < W / 2 ? -1 : 1;
-});
-canvas.addEventListener('touchend', () => { playerState.dir = 0; });
+// touch controls: tap left/right halves
+canvas.addEventListener('touchstart', e => { e.preventDefault(); const x = e.touches[0].clientX; player.dir = x < W/2 ? -1 : 1; });
+canvas.addEventListener('touchend', e => { player.dir = 0; });
 
-restartBtn.addEventListener('click', reset);
+restartBtn.addEventListener('click', () => { reset(); });
 
-reset();
+// initialize positions and start
+player.x = W/2 - player.w/2; player.y = H - player.h - 30;
+lastTime = performance.now();
+requestAnimationFrame(loop);
