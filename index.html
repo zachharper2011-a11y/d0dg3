@@ -38,7 +38,7 @@ function playMusic(){
   musicStarted = true;
   music.currentTime = 0;
   music.play().catch(() => {
-    // Autoplay may be blocked until the user interacts with the page
+    
   });
 }
 
@@ -71,7 +71,7 @@ resize();
 // Player
 const player = {w:60,h:18,x:0,y:0,speed:520,dir:0};
 
-// Enemies
+// Enemy spacships
 let enemies = [];
 let running = true;
 let lastTime = 0;
