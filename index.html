@@ -112,7 +112,6 @@ function update(dt){
   spawnTimer += dt*1000;
   if(spawnTimer > spawnInterval){ spawnTimer = 0; spawn(); spawnInterval = Math.max(300, spawnInterval*0.995); }
 
-  // update enemies
   for(let i=enemies.length-1;i>=0;i--){
     const e = enemies[i];
     e.y += e.speed * dt;
@@ -120,7 +119,6 @@ function update(dt){
     else if(rectsCollide(e, player)) { running = false; }
   }
 
-  // score grows with time and cleared enemies
   score += dt * 10;
 }
 
@@ -134,7 +132,7 @@ function draw(){
   ctx.fillStyle = bg;
   ctx.fillRect(0,0,W,H);
 
-  // bright nebula
+  // bright thingy
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const nebula = ctx.createRadialGradient(W * 0.8, H * 0.15, 0, W * 0.8, H * 0.15, W * 0.28);
@@ -153,7 +151,7 @@ function draw(){
     ctx.fillRect(star.x, star.y, star.size, star.size);
   });
 
-  // big sparkles
+  // big sparkle
   for(let i=0;i<6;i++){
     const x = (i + 0.5) / 6 * W;
     const y = H * 0.1 + (i % 2) * H * 0.08;
@@ -178,7 +176,7 @@ function draw(){
   ctx.arc(W * 0.25, H * 0.2, W * 0.09, 0, Math.PI * 2);
   ctx.fill();
 
-  // smeared player trail
+  //  player trail
   if(player.dir !== 0){
     ctx.fillStyle = 'rgba(78, 225, 167, 0.18)';
     for(let i=1;i<=4;i++){
